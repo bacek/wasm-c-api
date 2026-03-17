@@ -51,10 +51,10 @@ auto impl(const C* x) -> const typename implement<C>::type* {
 struct Stats {
   enum category_t {
     BYTE, CONFIG, ENGINE, STORE, FRAME,
-    VALTYPE, FUNCTYPE, GLOBALTYPE, TABLETYPE, MEMORYTYPE,
+    VALTYPE, FUNCTYPE, GLOBALTYPE, TABLETYPE, MEMORYTYPE, TAGTYPE,
     EXTERNTYPE, IMPORTTYPE, EXPORTTYPE,
     VAL, REF, TRAP,
-    MODULE, INSTANCE, FUNC, GLOBAL, TABLE, MEMORY, EXTERN,
+    MODULE, INSTANCE, FUNC, GLOBAL, TABLE, MEMORY, TAG, EXTERN,
     STRONG_COUNT,
     FUNCDATA_FUNCTYPE, FUNCDATA_VALTYPE,
     CATEGORY_COUNT
@@ -148,6 +148,7 @@ struct Stats {
     if (wasm_v8::object_is_global(obj)) return GLOBAL;
     if (wasm_v8::object_is_table(obj)) return TABLE;
     if (wasm_v8::object_is_memory(obj)) return MEMORY;
+    if (wasm_v8::object_is_tag(obj)) return TAG;
     if (wasm_v8::object_is_module(obj)) return MODULE;
     if (wasm_v8::object_is_instance(obj)) return INSTANCE;
     if (wasm_v8::object_is_error(obj)) return TRAP;
@@ -161,6 +162,7 @@ template<> struct categorize<Func> { static const auto value = Stats::FUNC; };
 template<> struct categorize<Global> { static const auto value = Stats::GLOBAL; };
 template<> struct categorize<Table> { static const auto value = Stats::TABLE; };
 template<> struct categorize<Memory> { static const auto value = Stats::MEMORY; };
+template<> struct categorize<Tag> { static const auto value = Stats::TAG; };
 template<> struct categorize<Module> { static const auto value = Stats::MODULE; };
 template<> struct categorize<Instance> { static const auto value = Stats::INSTANCE; };
 template<> struct categorize<Trap> { static const auto value = Stats::TRAP; };
@@ -168,10 +170,10 @@ template<> struct categorize<Trap> { static const auto value = Stats::TRAP; };
 #ifdef WASM_API_DEBUG
 const char* Stats::name[STRONG_COUNT] = {
   "byte_t", "Config", "Engine", "Store", "Frame",
-  "ValType", "FuncType", "GlobalType", "TableType", "MemoryType",
+  "ValType", "FuncType", "GlobalType", "TableType", "MemoryType", "TagType",
   "ExternType", "ImportType", "ExportType",
   "Val", "Ref", "Trap",
-  "Module", "Instance", "Func", "Global", "Table", "Memory", "Extern"
+  "Module", "Instance", "Func", "Global", "Table", "Memory", "Tag", "Extern"
 };
 
 const char* Stats::left[CARDINALITY_COUNT] = {
@@ -207,6 +209,7 @@ DEFINE_VEC(FuncType, ownvec, FUNCTYPE)
 DEFINE_VEC(GlobalType, ownvec, GLOBALTYPE)
 DEFINE_VEC(TableType, ownvec, TABLETYPE)
 DEFINE_VEC(MemoryType, ownvec, MEMORYTYPE)
+DEFINE_VEC(TagType, ownvec, TAGTYPE)
 DEFINE_VEC(ExternType, ownvec, EXTERNTYPE)
 DEFINE_VEC(ImportType, ownvec, IMPORTTYPE)
 DEFINE_VEC(ExportType, ownvec, EXPORTTYPE)
@@ -218,6 +221,7 @@ DEFINE_VEC(Func, ownvec, FUNC)
 DEFINE_VEC(Global, ownvec, GLOBAL)
 DEFINE_VEC(Table, ownvec, TABLE)
 DEFINE_VEC(Memory, ownvec, MEMORY)
+DEFINE_VEC(Tag, ownvec, TAG)
 DEFINE_VEC(Extern, ownvec, EXTERN)
 DEFINE_VEC(Extern*, vec, EXTERN)
 DEFINE_VEC(Val, vec, VAL)
@@ -1543,7 +1547,7 @@ auto Extern::type() const -> own<ExternType> {
     case ExternKind::GLOBAL: return global()->type();
     case ExternKind::TABLE: return table()->type();
     case ExternKind::MEMORY: return memory()->type();
-    case ExternKind::TAG: return nullptr;
+    case ExternKind::TAG: return tag()->type();
   }
 }
 
@@ -1577,6 +1581,14 @@ auto Extern::table() const -> const Table* {
 
 auto Extern::memory() const -> const Memory* {
   return kind() == ExternKind::MEMORY ? static_cast<const Memory*>(this) : nullptr;
+}
+
+auto Extern::tag() -> Tag* {
+  return kind() == ExternKind::TAG ? static_cast<Tag*>(this) : nullptr;
+}
+
+auto Extern::tag() const -> const Tag* {
+  return kind() == ExternKind::TAG ? static_cast<const Tag*>(this) : nullptr;
 }
 
 auto extern_to_v8(const Extern* ex) -> v8::Local<v8::Value> {
@@ -2059,6 +2071,31 @@ auto Memory::grow(pages_t delta) -> bool {
 }
 
 
+// Tag Instances
+
+template<> struct implement<Tag> { using type = RefImpl<Tag>; };
+
+
+void Tag::destroy() {
+  impl(this)->~RefImpl<Tag>();
+}
+
+auto Tag::copy() const -> own<Tag> {
+  return impl(this)->copy();
+}
+
+auto Tag::type() const -> own<TagType> {
+  v8::HandleScope handle_scope(impl(this)->isolate());
+  auto v8_tag = impl(this)->v8_object();
+  uint32_t arity = wasm_v8::tag_type_param_arity(v8_tag);
+  auto params = ownvec<ValType>::make_uninitialized(arity);
+  for (uint32_t i = 0; i < arity; ++i) {
+    params[i] = ValType::make(static_cast<ValKind>(wasm_v8::tag_type_param(v8_tag, i)));
+  }
+  return TagType::make(FuncType::make(std::move(params), ownvec<ValType>::make()));
+}
+
+
 // Module Instances
 
 template<> struct implement<Instance> { using type = RefImpl<Instance>; };
@@ -2180,7 +2217,8 @@ auto Instance::exports() const -> ownvec<Extern> {
         exports[i] = RefImpl<Memory>::make(store, obj);
       } break;
       case ExternKind::TAG: {
-        // Tags are not yet supported as first-class externs in the V8 backend.
+        assert(wasm_v8::extern_kind(obj) == wasm_v8::EXTERN_TAG);
+        exports[i] = RefImpl<Tag>::make(store, obj);
       } break;
     }
   }

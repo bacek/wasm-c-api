@@ -82,6 +82,11 @@ auto object_is_memory(v8::Local<v8::Object> obj) -> bool {
   return v8_obj->IsWasmMemoryObject();
 }
 
+auto object_is_tag(v8::Local<v8::Object> obj) -> bool {
+  auto v8_obj = v8::Utils::OpenHandle(*obj);
+  return v8_obj->IsWasmTagObject();
+}
+
 auto object_is_error(v8::Local<v8::Object> obj) -> bool {
   auto v8_obj = v8::Utils::OpenHandle(*obj);
   return v8_obj->IsJSError();
@@ -228,6 +233,18 @@ auto memory_type_max(v8::Local<v8::Object> memory) -> uint32_t {
   return v8_memory->has_maximum_pages() ? v8_memory->maximum_pages() : 0xffffffffu;
 }
 
+auto tag_type_param_arity(v8::Local<v8::Object> tag) -> uint32_t {
+  auto v8_object = v8::Utils::OpenHandle<v8::Object, v8::internal::JSReceiver>(tag);
+  auto v8_tag = v8::internal::Handle<v8::internal::WasmTagObject>::cast(v8_object);
+  return static_cast<uint32_t>(v8_tag->serialized_signature().length());
+}
+
+auto tag_type_param(v8::Local<v8::Object> tag, size_t i) -> val_kind_t {
+  auto v8_object = v8::Utils::OpenHandle<v8::Object, v8::internal::JSReceiver>(tag);
+  auto v8_tag = v8::internal::Handle<v8::internal::WasmTagObject>::cast(v8_object);
+  return v8_valtype_to_wasm(v8_tag->serialized_signature().get(static_cast<int>(i)));
+}
+
 
 // Modules
 
@@ -300,6 +317,7 @@ auto extern_kind(v8::Local<v8::Object> external) -> extern_kind_t {
   if (v8_object->IsWasmGlobalObject()) return EXTERN_GLOBAL;
   if (v8_object->IsWasmTableObject()) return EXTERN_TABLE;
   if (v8_object->IsWasmMemoryObject()) return EXTERN_MEMORY;
+  if (v8_object->IsWasmTagObject()) return EXTERN_TAG;
   UNREACHABLE();
 }
 

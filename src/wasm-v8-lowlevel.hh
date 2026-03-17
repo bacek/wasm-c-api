@@ -17,6 +17,7 @@ auto object_is_func(v8::Local<v8::Object>) -> bool;
 auto object_is_global(v8::Local<v8::Object>) -> bool;
 auto object_is_table(v8::Local<v8::Object>) -> bool;
 auto object_is_memory(v8::Local<v8::Object>) -> bool;
+auto object_is_tag(v8::Local<v8::Object>) -> bool;
 auto object_is_error(v8::Local<v8::Object>) -> bool;
 
 auto foreign_new(v8::Isolate*, void*) -> v8::Local<v8::Value>;
@@ -40,6 +41,9 @@ auto table_type_max(v8::Local<v8::Object> table) -> uint32_t;
 auto memory_type_min(v8::Local<v8::Object> memory) -> uint32_t;
 auto memory_type_max(v8::Local<v8::Object> memory) -> uint32_t;
 
+auto tag_type_param_arity(v8::Local<v8::Object> tag) -> uint32_t;
+auto tag_type_param(v8::Local<v8::Object> tag, size_t i) -> val_kind_t;
+
 auto module_binary_size(v8::Local<v8::Object> module) -> size_t;
 auto module_binary(v8::Local<v8::Object> module) -> const char*;
 auto module_serialize_size(v8::Local<v8::Object> module) -> size_t;
@@ -49,7 +53,7 @@ auto module_deserialize(v8::Isolate*, const uint8_t*, size_t, const uint8_t*, si
 auto instance_module(v8::Local<v8::Object> instance) -> v8::Local<v8::Object>;
 auto instance_exports(v8::Local<v8::Object> instance) -> v8::Local<v8::Object>;
 
-enum extern_kind_t { EXTERN_FUNC, EXTERN_GLOBAL, EXTERN_TABLE, EXTERN_MEMORY };
+enum extern_kind_t { EXTERN_FUNC, EXTERN_GLOBAL, EXTERN_TABLE, EXTERN_MEMORY, EXTERN_TAG };
 auto extern_kind(v8::Local<v8::Object> external) -> extern_kind_t;
 
 auto func_instance(v8::Local<v8::Function>) -> v8::Local<v8::Object>;

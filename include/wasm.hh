@@ -713,6 +713,7 @@ class Func;
 class Global;
 class Table;
 class Memory;
+class Tag;
 
 class WASM_API_EXTERN Extern : public Ref {
   friend class destroyer;
@@ -732,11 +733,13 @@ public:
   auto global() -> Global*;
   auto table() -> Table*;
   auto memory() -> Memory*;
+  auto tag() -> Tag*;
 
   auto func() const -> const Func*;
   auto global() const -> const Global*;
   auto table() const -> const Table*;
   auto memory() const -> const Memory*;
+  auto tag() const -> const Tag*;
 };
 
 
@@ -835,6 +838,23 @@ public:
   auto data_size() const -> size_t;
   auto size() const -> pages_t;
   auto grow(pages_t delta) -> bool;
+};
+
+
+// Tag Instances
+
+class WASM_API_EXTERN Tag : public Extern {
+  friend class destroyer;
+  void destroy();
+
+protected:
+  Tag() = default;
+  ~Tag() = default;
+
+public:
+  auto copy() const -> own<Tag>;
+
+  auto type() const -> own<TagType>;
 };
 
 

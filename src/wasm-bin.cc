@@ -336,7 +336,8 @@ enum sec_t : byte_t {
   SEC_TABLE = 4,
   SEC_MEMORY = 5,
   SEC_GLOBAL = 6,
-  SEC_EXPORT = 7
+  SEC_EXPORT = 7,
+  SEC_TAG = 13
 };
 
 auto section(const vec<byte_t>& binary, bin::sec_t sec) -> const byte_t* {
@@ -524,11 +525,28 @@ auto memories(
 }
 
 
+// Tag section
+
+auto tags(
+  const vec<byte_t>& binary, const ownvec<FuncType>& types
+) -> ownvec<TagType> {
+  auto pos = bin::section(binary, SEC_TAG);
+  size_t size = pos != nullptr ? bin::u32(pos) : 0;
+  auto v = ownvec<TagType>::make_uninitialized(size);
+  for (uint32_t i = 0; i < size; ++i) {
+    bin::u32_skip(pos);  // attribute (always 0)
+    v[i] = TagType::make(types[bin::u32(pos)]->copy());
+  }
+  return v;
+}
+
+
 // Export section
 
 auto exports(const vec<byte_t>& binary,
   const ownvec<FuncType>& funcs, const ownvec<GlobalType>& globals,
-  const ownvec<TableType>& tables, const ownvec<MemoryType>& memories
+  const ownvec<TableType>& tables, const ownvec<MemoryType>& memories,
+  const ownvec<TagType>& tags
 ) -> ownvec<ExportType> {
   auto pos = bin::section(binary, SEC_EXPORT);
   if (pos == nullptr) return ownvec<ExportType>::make();
@@ -544,6 +562,7 @@ auto exports(const vec<byte_t>& binary,
       case 0x01: type = tables[index]->copy(); break;
       case 0x02: type = memories[index]->copy(); break;
       case 0x03: type = globals[index]->copy(); break;
+      case 0x04: type = tags[index]->copy(); break;
       default: assert(false);
     }
     exports[i] = ExportType::make(std::move(name), std::move(type));
@@ -563,7 +582,8 @@ auto exports(const vec<byte_t>& binary) -> ownvec<ExportType> {
   auto globals = bin::globals(binary, imports);
   auto tables = bin::tables(binary, imports);
   auto memories = bin::memories(binary, imports);
-  return bin::exports(binary, funcs, globals, tables, memories);
+  auto tags = bin::tags(binary, types);
+  return bin::exports(binary, funcs, globals, tables, memories, tags);
 }
 
 }  // namespace bin
